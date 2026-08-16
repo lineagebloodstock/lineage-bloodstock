@@ -150,18 +150,6 @@ export default function SiteHeader() {
 
   const t = TEXT[selectedLanguage] || TEXT.es;
 
-  const isNews =
-    pathname === "/" ||
-    pathname === "/noticias" ||
-    pathname.startsWith("/noticias/");
-
-  const isBloodstock = pathname.startsWith("/bloodstock");
-  const isRaces = pathname.startsWith("/carreras");
-
-  const activeClass = "bg-[#8b0d0d] text-white border-[#8b0d0d]";
-  const inactiveClass =
-    "bg-[#fbf6ec] text-[#8b0d0d] border-[#8b0d0d] hover:bg-[#f2e7d6]";
-
   const loginHref = `/acceso-lineage?from=${encodeURIComponent(
     pathname || "/noticias"
   )}`;
@@ -236,34 +224,7 @@ export default function SiteHeader() {
           </div>
         </div>
 
-        <nav className="mx-auto mt-7 grid max-w-3xl grid-cols-3 border border-[#8b0d0d]">
-          <Link
-            href="/noticias"
-            className={`border-r border-[#8b0d0d] px-4 py-3 text-center text-xs font-semibold uppercase tracking-[0.16em] transition ${
-              isNews ? activeClass : inactiveClass
-            }`}
-          >
-            {t.news}
-          </Link>
 
-          <Link
-            href="/bloodstock"
-            className={`border-r border-[#8b0d0d] px-4 py-3 text-center text-xs font-semibold uppercase tracking-[0.16em] transition ${
-              isBloodstock ? activeClass : inactiveClass
-            }`}
-          >
-            {t.bloodstock}
-          </Link>
-
-          <Link
-            href="/carreras"
-            className={`px-4 py-3 text-center text-xs font-semibold uppercase tracking-[0.16em] transition ${
-              isRaces ? activeClass : inactiveClass
-            }`}
-          >
-            {t.races}
-          </Link>
-        </nav>
       </div>
     </header>
   );

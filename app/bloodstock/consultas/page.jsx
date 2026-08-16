@@ -33,6 +33,11 @@ const TEXT = {
     writeToFilter: "Escribir para filtrar",
     openAll: "Abrir todas",
     closeAll: "Cerrar todas",
+    searchAs: "Buscar como",
+    searchHorse: "Ejemplar",
+    searchDam: "Yegua madre",
+    searchSire: "Padrillo",
+    startSearch: "Escribí un nombre o elegí un filtro para desplegar los caballos.",
   },
   pt: {
     heroTitle: "Consultas de bloodstock.",
@@ -60,6 +65,11 @@ const TEXT = {
     writeToFilter: "Escrever para filtrar",
     openAll: "Abrir todas",
     closeAll: "Fechar todas",
+    searchAs: "Buscar como",
+    searchHorse: "Exemplar",
+    searchDam: "Égua mãe",
+    searchSire: "Garanhão",
+    startSearch: "Digite um nome ou escolha um filtro para mostrar os cavalos.",
   },
   en: {
     heroTitle: "Bloodstock queries.",
@@ -87,6 +97,11 @@ const TEXT = {
     writeToFilter: "Type to filter",
     openAll: "Open all",
     closeAll: "Close all",
+    searchAs: "Search by",
+    searchHorse: "Horse",
+    searchDam: "Dam",
+    searchSire: "Sire",
+    startSearch: "Type a name or choose a filter to display horses.",
   },
 };
 
@@ -112,12 +127,14 @@ export default function BloodstockConsultasPage() {
 
   const [horses, setHorses] = useState([]);
   const [relations, setRelations] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [loadError, setLoadError] = useState("");
 
   const [search, setSearch] = useState("");
-  const [country, setCountry] = useState("");
-  const [family, setFamily] = useState("");
+  const [searchMode, setSearchMode] = useState("horse");
+  const [countriesFilter, setCountriesFilter] = useState([]);
+  const [familiesFilter, setFamiliesFilter] = useState([]);
   const [groupByFamily, setGroupByFamily] = useState(false);
 
   const [sortConfig, setSortConfig] = useState({
@@ -126,9 +143,17 @@ export default function BloodstockConsultasPage() {
   });
 
   useEffect(() => {
-    loadHorses();
+    const q = search.trim();
+
+    if (!q || hasLoaded || loading) return;
+
+    const timer = window.setTimeout(() => {
+      loadHorses();
+    }, 250);
+
+    return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [search, hasLoaded, loading]);
 
   async function loadHorses() {
     setLoading(true);
@@ -155,6 +180,7 @@ export default function BloodstockConsultasPage() {
 
       setHorses(horseRows);
       setRelations(relationRows);
+      setHasLoaded(true);
     } catch (err) {
       setLoadError(err?.message || t.error);
     } finally {
@@ -229,19 +255,48 @@ export default function BloodstockConsultasPage() {
   }, [horses]);
 
   const filtered = useMemo(() => {
-    return horses.filter((item) => {
-      const q = normalizeText(search);
-      const countryQ = normalizeText(country);
-      const familyQ = normalizeText(normalizeFamily(family));
-      const itemFamily = normalizeFamily(item.family);
+    const q = normalizeText(search);
+    const selectedCountries = new Set(
+      countriesFilter.map((item) => normalizeText(item))
+    );
+    const selectedFamilies = new Set(
+      familiesFilter.map((item) => normalizeText(normalizeFamily(item)))
+    );
 
-      const matchesSearch = !q || normalizeText(item.name).includes(q);
-      const matchesCountry = !countryQ || normalizeText(item.country).includes(countryQ);
-      const matchesFamily = !familyQ || normalizeText(itemFamily).includes(familyQ);
+    return horses.filter((item) => {
+      const pedigreeInfo = pedigreeNamesByHorse.get(item.external_key) || {};
+      const itemCountry = normalizeText(item.country);
+      const itemFamily = normalizeText(normalizeFamily(item.family));
+
+      let searchValue = item.name || "";
+
+      if (searchMode === "dam") {
+        searchValue = pedigreeInfo.dam || "";
+      }
+
+      if (searchMode === "sire") {
+        searchValue = pedigreeInfo.sire || "";
+      }
+
+      const matchesSearch =
+        !q || normalizeText(searchValue).includes(q);
+
+      const matchesCountry =
+        !selectedCountries.size || selectedCountries.has(itemCountry);
+
+      const matchesFamily =
+        !selectedFamilies.size || selectedFamilies.has(itemFamily);
 
       return matchesSearch && matchesCountry && matchesFamily;
     });
-  }, [horses, search, country, family]);
+  }, [
+    horses,
+    search,
+    searchMode,
+    countriesFilter,
+    familiesFilter,
+    pedigreeNamesByHorse,
+  ]);
 
   function getSortValue(item, key) {
     const pedigreeInfo = pedigreeNamesByHorse.get(item.external_key) || {};
@@ -322,6 +377,14 @@ export default function BloodstockConsultasPage() {
     }));
   }, [sortedItems, t.noFamily]);
 
+  const hasActiveFilters = useMemo(() => {
+    return (
+      Boolean(search.trim()) ||
+      countriesFilter.length > 0 ||
+      familiesFilter.length > 0
+    );
+  }, [search, countriesFilter, familiesFilter]);
+
   function handleSort(key) {
     setSortConfig((current) => {
       if (current.key === key) {
@@ -374,34 +437,49 @@ export default function BloodstockConsultasPage() {
 
       <section className="mx-auto max-w-7xl px-5 py-10">
         <div className="border border-[#e5d3bd] bg-[#fffaf1] p-4">
-          <div className="grid gap-4 md:grid-cols-[1.4fr_0.8fr_0.8fr]">
+          <label className="block w-full md:w-1/2">
+            <span className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.14em] text-[#8b0d0d]">
+              {t.search}
+            </span>
+            <div className="flex items-center gap-3 border-b border-[#8b0d0d]">
+              <SearchIcon />
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                className="w-full bg-transparent px-1 py-3 text-sm font-semibold text-[#2b140f] outline-none placeholder:text-[#a58a7e]"
+              />
+            </div>
+          </label>
+
+          <div className="mt-5 grid gap-4 md:grid-cols-[0.85fr_1fr_1fr]">
             <label className="block">
               <span className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.14em] text-[#8b0d0d]">
-                {t.search}
+                {t.searchAs}
               </span>
-              <div className="flex items-center gap-3 border-b border-[#8b0d0d]">
-                <SearchIcon />
-                <input
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  className="w-full bg-transparent px-1 py-3 text-sm font-semibold text-[#2b140f] outline-none placeholder:text-[#a58a7e]"
-                />
-              </div>
+              <select
+                value={searchMode}
+                onChange={(event) => setSearchMode(event.target.value)}
+                className="w-full border-0 border-b border-[#8b0d0d] bg-transparent px-1 py-3 text-sm font-semibold text-[#2b140f] outline-none"
+              >
+                <option value="horse">{t.searchHorse}</option>
+                <option value="dam">{t.searchDam}</option>
+                <option value="sire">{t.searchSire}</option>
+              </select>
             </label>
 
-            <AutocompleteFilter
+            <MultiSelectFilter
               label={t.country}
-              value={country}
-              onChange={setCountry}
+              value={countriesFilter}
+              onChange={setCountriesFilter}
               options={countries}
               allLabel={t.all}
               placeholder={t.writeToFilter}
             />
 
-            <AutocompleteFilter
+            <MultiSelectFilter
               label={t.family}
-              value={family}
-              onChange={setFamily}
+              value={familiesFilter}
+              onChange={setFamiliesFilter}
               options={families}
               allLabel={t.all}
               placeholder="Ej: 1-a"
@@ -420,10 +498,10 @@ export default function BloodstockConsultasPage() {
         </div>
 
         <div className="mt-6">
-          {loading ? (
-            <MessageBox text={t.loading} />
-          ) : loadError ? (
+          {loading ? null : loadError ? (
             <MessageBox text={loadError} error />
+          ) : !hasActiveFilters ? (
+            <MessageBox text={t.startSearch} />
           ) : groupByFamily ? (
             <GroupedTable
               empty={emptyText}
@@ -545,7 +623,7 @@ function SearchIcon() {
   );
 }
 
-function AutocompleteFilter({
+function MultiSelectFilter({
   label,
   value,
   onChange,
@@ -554,15 +632,34 @@ function AutocompleteFilter({
   placeholder = "",
 }) {
   const [open, setOpen] = useState(false);
+  const [filterText, setFilterText] = useState("");
+
+  const selectedValues = Array.isArray(value) ? value : [];
 
   const visibleOptions = useMemo(() => {
-    const q = normalizeText(value);
+    const q = normalizeText(filterText);
     const list = !q
       ? options
       : options.filter((option) => normalizeText(option).includes(q));
 
-    return list.slice(0, 60);
-  }, [options, value]);
+    return list.slice(0, 80);
+  }, [options, filterText]);
+
+  function toggleOption(option) {
+    const exists = selectedValues.includes(option);
+
+    if (exists) {
+      onChange(selectedValues.filter((item) => item !== option));
+      return;
+    }
+
+    onChange([...selectedValues, option]);
+  }
+
+  function clearAll() {
+    onChange([]);
+    setFilterText("");
+  }
 
   return (
     <label className="relative block">
@@ -570,26 +667,49 @@ function AutocompleteFilter({
         {label}
       </span>
 
-      <input
-        value={value}
-        onFocus={() => setOpen(true)}
-        onBlur={() => {
-          window.setTimeout(() => setOpen(false), 120);
-        }}
-        onChange={(event) => {
-          onChange(event.target.value);
-          setOpen(true);
-        }}
-        placeholder={placeholder}
-        className="w-full border-0 border-b border-[#8b0d0d] bg-transparent px-1 py-3 text-sm font-semibold text-[#2b140f] outline-none placeholder:font-normal placeholder:text-[#a58a7e]"
-      />
+      <div className="min-h-[43px] border-0 border-b border-[#8b0d0d] bg-transparent px-1 py-2">
+        {selectedValues.length ? (
+          <div className="mb-2 flex flex-wrap gap-1.5">
+            {selectedValues.map((item) => (
+              <button
+                key={item}
+                type="button"
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  onChange(
+                    selectedValues.filter((selected) => selected !== item)
+                  );
+                }}
+                className="inline-flex items-center gap-1 border border-[#8b0d0d] bg-[#f8f1e5] px-2 py-1 text-[10px] font-black uppercase tracking-[0.1em] text-[#8b0d0d]"
+              >
+                {item}
+                <span aria-hidden="true">×</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
 
-      {value ? (
+        <input
+          value={filterText}
+          onFocus={() => setOpen(true)}
+          onBlur={() => {
+            window.setTimeout(() => setOpen(false), 120);
+          }}
+          onChange={(event) => {
+            setFilterText(event.target.value);
+            setOpen(true);
+          }}
+          placeholder={selectedValues.length ? "" : placeholder}
+          className="w-full border-0 bg-transparent p-0 text-sm font-semibold text-[#2b140f] outline-none placeholder:font-normal placeholder:text-[#a58a7e]"
+        />
+      </div>
+
+      {selectedValues.length ? (
         <button
           type="button"
           onMouseDown={(event) => {
             event.preventDefault();
-            onChange("");
+            clearAll();
             setOpen(false);
           }}
           className="absolute right-1 top-[34px] text-[11px] font-black uppercase tracking-[0.12em] text-[#8b0d0d]"
@@ -604,7 +724,7 @@ function AutocompleteFilter({
             type="button"
             onMouseDown={(event) => {
               event.preventDefault();
-              onChange("");
+              clearAll();
               setOpen(false);
             }}
             className="block w-full border-b border-[#e5d3bd] px-3 py-2 text-left text-[11px] font-black uppercase tracking-[0.14em] text-[#8b0d0d] hover:bg-[#f4eadb]"
@@ -613,20 +733,31 @@ function AutocompleteFilter({
           </button>
 
           {visibleOptions.length ? (
-            visibleOptions.map((option) => (
-              <button
-                key={option}
-                type="button"
-                onMouseDown={(event) => {
-                  event.preventDefault();
-                  onChange(option);
-                  setOpen(false);
-                }}
-                className="block w-full border-b border-[#eadccc] px-3 py-2 text-left text-sm font-semibold text-[#2b140f] hover:bg-[#f4eadb]"
-              >
-                {option}
-              </button>
-            ))
+            visibleOptions.map((option) => {
+              const checked = selectedValues.includes(option);
+
+              return (
+                <button
+                  key={option}
+                  type="button"
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    toggleOption(option);
+                    setOpen(true);
+                  }}
+                  className={`flex w-full items-center justify-between gap-3 border-b border-[#eadccc] px-3 py-2 text-left text-sm font-semibold hover:bg-[#f4eadb] ${
+                    checked
+                      ? "bg-[#f8f1e5] text-[#8b0d0d]"
+                      : "text-[#2b140f]"
+                  }`}
+                >
+                  <span>{option}</span>
+                  <span className="text-[11px] font-black text-[#8b0d0d]">
+                    {checked ? "✓" : ""}
+                  </span>
+                </button>
+              );
+            })
           ) : (
             <div className="px-3 py-3 text-sm font-semibold text-[#7a6258]">
               -
